@@ -15,9 +15,9 @@ class App {
     
     //Game State Related
     public assets;
-    private _environment;
+    private _environment: Environment;
     private _player: Player;
-    private _input;
+    private _input: PlayerInput;
 
     //Scene - related
     private _state: number = 0;

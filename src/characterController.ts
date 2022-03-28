@@ -2,7 +2,7 @@ import { ArcRotateCamera, Mesh, Quaternion, Ray, Scene, ShadowGenerator, Transfo
 
 export class Player extends TransformNode {
     // Settings
-    public static SPEED : number = 0.10;
+    public static SPEED : number = 0.4;
     public static JUMP_FORCE : number = 0.40;
     public static GRAVITY : number = -0.8;
     public static DASH_FACTOR : number = 1.5;
