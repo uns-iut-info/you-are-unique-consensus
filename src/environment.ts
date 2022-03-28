@@ -23,6 +23,8 @@ export class Environment {
     public async _loadAsset() {
         //loads game environment
         const result = await SceneLoader.ImportMeshAsync(null, "./models/", "envSetting.glb", this._scene);
+        var ground = Mesh.CreateBox("ground", 24, this._scene);
+        ground.scaling = new Vector3(50,.02,50);
 
         let env = result.meshes[0];
         let allMeshes = env.getChildMeshes();

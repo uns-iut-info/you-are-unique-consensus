@@ -1,32 +1,50 @@
-import { ArcRotateCamera, Mesh, Quaternion, Ray, Scene, ShadowGenerator, TransformNode, UniversalCamera, Vector2, Vector3 } from "@babylonjs/core";
+import { AnimationGroup, ArcRotateCamera, Mesh, Quaternion, Ray, RuntimeAnimation, Scene, ShadowGenerator, TransformNode, UniversalCamera, Vector2, Vector3 } from "@babylonjs/core";
 
 export class Player extends TransformNode {
-    // Settings
-    public static SPEED : number = 0.4;
+    // Genral settings
+    public static SPEED : number = 0.25;
     public static JUMP_FORCE : number = 0.40;
     public static GRAVITY : number = -0.8;
     public static DASH_FACTOR : number = 1.5;
     public static DASH_TIME : number = 50; //how many frames the dash lasts
-    public static MAX_JUMP : number = 1;
+    public static MAX_JUMP : number = 2;
+
+    // Input settings
+
     public dashTime: number = 0;
-    private _jumpCount: number = 1;
+    private _jumpCount: number = 2;
 
     // Camera
-    private _camRoot;
-    public camera;
+    private _camRoot: TransformNode;
+    public camera: ArcRotateCamera;
     static ORIGINAL_TILT: Vector3 = new Vector3(Math.PI/8,0,0);
 
     // Scene
     public scene: Scene;
 
-    // Animation
-    private _currentAnim : any;
+    //animations
+    private _run: AnimationGroup;
+    private _startRun: AnimationGroup;
+    private _idle: AnimationGroup;
+    private _jump: AnimationGroup;
+    private _land: AnimationGroup;
+    private _dash: AnimationGroup;
+    private _currentAnim: AnimationGroup;
+    private _prevAnim: AnimationGroup;
+    
+    //animations settings
+    private _numberFrameSinceLastAnim : number = 0; 
+    private _numberFrameStartRunToRun : number = 130;
 
     // Controls/Physics
     private _input;
     private _moveDirection;
-    private _h;
-    private _v;
+    private _h: number;
+    private _v: number;
+    private _ax: number;
+    private _az: number;
+    private _vx: number;
+    private _vz: number;
     private _inputAmt;
     private _grounded;
     private _gravity: Vector3 = new Vector3();
@@ -45,13 +63,16 @@ export class Player extends TransformNode {
         this.mesh = assets.mesh;
         this.mesh.parent = this;
         this._setupPlayerCamera();
-
+        console.log(assets.animationGroups);
         shadowGenerator.addShadowCaster(assets.mesh); //the player mesh will cast shadows
-
-        this._input = input; //inputs we will get from inputController.ts
+        this._input = input;
+        this._startRun = assets.animationGroups[0];
+        this._idle = assets.animationGroups[1];
+        this._run = assets.animationGroups[3];
+        this._setUpAnimations();
     }
 
-    private _setupPlayerCamera() : UniversalCamera {
+    private _setupPlayerCamera() : ArcRotateCamera {
         //root camera parent that handles positioning of the camera to follow the player
         this._camRoot = new TransformNode("root");
         this._camRoot.position = new Vector3(0, 0, 0); //initialized at (0,0,0)
@@ -74,7 +95,6 @@ export class Player extends TransformNode {
     private _updateCamera(): void {
         let centerPlayer = this.mesh.position.y + 2;
         this._camRoot.position = Vector3.Lerp(this._camRoot.position, new Vector3(this.mesh.position.x, centerPlayer, this.mesh.position.z), 0.4);
-        //this._camRoot.rotation =  this._camRoot.rotation.add(new Vector3(0,0.01,0));
     }
 
     private _updateFromControls(): void {
@@ -86,21 +106,9 @@ export class Player extends TransformNode {
         //--DASHING--
         //limit dash to once per ground/platform touch
         //can only dash when in the air
-        if (this._input.dashing && !this._dashPressed && this._canDash) {
+        if (this._input.dashing && !this._dashPressed && this._canDash && this._grounded) {
             this._canDash = false;
             this._dashPressed = true;
-        }
-
-        let dashFactor = 1;
-        //if you're dashing, scale movement
-        if (this._dashPressed) {
-            if (this.dashTime > Player.DASH_TIME) {
-                this.dashTime = 0;
-                this._dashPressed = false;
-            } else {
-                dashFactor = Player.DASH_FACTOR;
-            }
-            this.dashTime++;
         }
         
         //--MOVEMENTS BASED ON CAMERA (as it rotates)--
@@ -113,7 +121,7 @@ export class Player extends TransformNode {
         let move = correctedHorizontal.addInPlace(correctedVertical);
 
         //clear y so that the character doesnt fly up, normalize for next step
-        this._moveDirection = new Vector3((move).normalize().x * dashFactor, 0, (move).normalize().z * dashFactor);
+        this._moveDirection = new Vector3((move).normalize().x, 0, (move).normalize().z);
 
         //clamp the input value so that diagonal movement isn't twice as fast
         let inputMag = Math.abs(this._h) + Math.abs(this._v);
@@ -145,15 +153,51 @@ export class Player extends TransformNode {
     private _beforeRenderUpdate(): void {
         this._updateFromControls();
         this._updateGroundDetection();
+        this._animatePlayer();
     }
 
     public activatePlayerCamera(): ArcRotateCamera {
         this.scene.registerBeforeRender(() => {
             this._beforeRenderUpdate();
             this._updateCamera();
-    
         })
         return this.camera;
+    }
+
+    private _animatePlayer(): void {
+        if (this._input.inputMap["z"] || this._input.inputMap["q"] || this._input.inputMap["s"] || this._input.inputMap["d"])
+        {
+            if (this._currentAnim == this._idle){
+                this._numberFrameSinceLastAnim = 0;
+            }
+            if (this._currentAnim !== this._run && this._numberFrameSinceLastAnim < this._numberFrameStartRunToRun)
+            {
+                this._currentAnim = this._startRun;
+            } else {
+                this._currentAnim = this._run;
+            }
+        } else {
+            this._currentAnim = this._idle;
+        }
+        console.log(this._currentAnim.name);
+        if(this._currentAnim != null && this._prevAnim !== this._currentAnim){
+            this._prevAnim.stop();
+            this._currentAnim.play(this._currentAnim.loopAnimation);
+            this._prevAnim = this._currentAnim;
+            this._numberFrameSinceLastAnim = 0;
+        }
+        this._numberFrameSinceLastAnim++;
+    }
+
+    private _setUpAnimations(): void {
+        this.scene.stopAllAnimations();
+        this._startRun.loopAnimation = false;
+        this._run.loopAnimation = true;
+        this._idle.loopAnimation = true;
+
+        //initialize current and previous
+        this._currentAnim = this._idle;
+        this._prevAnim = this._run;
     }
 
     private _floorRaycast(offsetx: number, offsetz: number, raycastlen: number): Vector3 {
@@ -213,12 +257,10 @@ export class Player extends TransformNode {
     }
 
     private _checkSlope(): boolean {
-
         //only check meshes that are pickable and enabled (specific for collision meshes that are invisible)
         let predicate = function (mesh) {
             return mesh.isPickable && mesh.isEnabled();
         }
-
         //4 raycasts outward from center
         let raycast = new Vector3(this.mesh.position.x, this.mesh.position.y + 0.5, this.mesh.position.z + .25);
         let ray = new Ray(raycast, Vector3.Up().scale(-1), 1.5);

@@ -132,6 +132,7 @@ class App {
             
                 return {
                     mesh: outer as Mesh,
+                    animationGroups: result.animationGroups
                 }
             });
         }
