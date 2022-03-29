@@ -8,23 +8,21 @@ export class Environment {
     }
 
     public async load() {
-        /*
         var ground = Mesh.CreateBox("ground", 24, this._scene);
-        ground.scaling = new Vector3(1,.02,1);
-        */
+        ground.scaling = new Vector3(10,.02,10);
+        /*
         const assets = await this._loadAsset();
         //Loop through all environment meshes that were imported
         assets.allMeshes.forEach((m) => {
             m.receiveShadows = true;
             m.checkCollisions = true;
         });
+        */
     }
 
     public async _loadAsset() {
         //loads game environment
         const result = await SceneLoader.ImportMeshAsync(null, "./models/", "envSetting.glb", this._scene);
-        var ground = Mesh.CreateBox("ground", 24, this._scene);
-        ground.scaling = new Vector3(50,.02,50);
 
         let env = result.meshes[0];
         let allMeshes = env.getChildMeshes();

@@ -83,8 +83,7 @@ class App {
         this._environment = environment; //class variable for App
         await this._environment.load(); //environment
         //...load assets
-        await this._loadCharacterAssets(scene); //character
-        
+        await this._loadCharacterAssets(scene); //character        
     }
 
     private async _initializeGameAsync(scene): Promise<void> {

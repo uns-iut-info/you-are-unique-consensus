@@ -1,18 +1,22 @@
 import { AnimationGroup, ArcRotateCamera, Mesh, Quaternion, Ray, RuntimeAnimation, Scene, ShadowGenerator, TransformNode, UniversalCamera, Vector2, Vector3 } from "@babylonjs/core";
 
 export class Player extends TransformNode {
-    // Genral settings
-    public static SPEED : number = 0.25;
-    public static JUMP_FORCE : number = 0.40;
-    public static GRAVITY : number = -0.8;
-    public static DASH_FACTOR : number = 1.5;
-    public static DASH_TIME : number = 50; //how many frames the dash lasts
-    public static MAX_JUMP : number = 2;
+    // General settings
+    public static SPEED: number = 0.25;
+    public static FIRST_JUMP_FORCE: number = 0.35;
+    public static SECOND_JUMP_FORCE: number = 0.28;
+    public static GRAVITY: number = -0.8;
+    public static DASH_FACTOR: number = 1.5;
+    public static DASH_TIME: number = 50; //how many frames the dash lasts
+    public static MAX_JUMP: number = 2;
+    public static AIR_RESISTANCE: number = 0.1;
+    public static ACCELERATION: number = 0.05;
 
     // Input settings
-
-    public dashTime: number = 0;
+    private _jumpCooldown: number = 60;
     private _jumpCount: number = 2;
+    private _jumpFrameSinceLastPressed : number = 0;
+    private _pressIsFirstJump : boolean = false;
 
     // Camera
     private _camRoot: TransformNode;
@@ -22,7 +26,8 @@ export class Player extends TransformNode {
     // Scene
     public scene: Scene;
 
-    //animations
+    // Animations
+    private _walk: AnimationGroup;
     private _run: AnimationGroup;
     private _startRun: AnimationGroup;
     private _idle: AnimationGroup;
@@ -31,22 +36,22 @@ export class Player extends TransformNode {
     private _dash: AnimationGroup;
     private _currentAnim: AnimationGroup;
     private _prevAnim: AnimationGroup;
+
+    // Animations settings
+    private _startRunCountFrame : number = 0; 
+    private _startRuntoRunNbFrame: number = 130;
     
-    //animations settings
-    private _numberFrameSinceLastAnim : number = 0; 
-    private _numberFrameStartRunToRun : number = 130;
+    // State
+    private _grounded;
 
     // Controls/Physics
     private _input;
-    private _moveDirection;
+    private _inputAsVector: Vector3;
     private _h: number;
     private _v: number;
-    private _ax: number;
-    private _az: number;
-    private _vx: number;
-    private _vz: number;
+    private _acc: Vector3 = new Vector3(0, 0, 0);
+    private _speed: Vector3 = new Vector3(0, 0, 0);
     private _inputAmt;
-    private _grounded;
     private _gravity: Vector3 = new Vector3();
     private _lastGroundPos: Vector3 = Vector3.Zero();
     private _deltaTime;
@@ -56,7 +61,7 @@ export class Player extends TransformNode {
     // Player
     public mesh: Mesh; //outer collisionbox of player
 
-    constructor(assets, scene: Scene, shadowGenerator: ShadowGenerator, input?) {
+    constructor(assets, scene: Scene, shadowGenerator: ShadowGenerator, input) {
         super("player", scene);
         this.scene = scene;
         
@@ -66,9 +71,11 @@ export class Player extends TransformNode {
         console.log(assets.animationGroups);
         shadowGenerator.addShadowCaster(assets.mesh); //the player mesh will cast shadows
         this._input = input;
-        this._startRun = assets.animationGroups[0];
-        this._idle = assets.animationGroups[1];
-        this._run = assets.animationGroups[3];
+        console.log(AnimationGroup)
+        this._walk = assets.animationGroups[0];
+        this._startRun = assets.animationGroups[1];
+        this._idle = assets.animationGroups[2];
+        this._run = assets.animationGroups[4];
         this._setUpAnimations();
     }
 
@@ -81,8 +88,7 @@ export class Player extends TransformNode {
 
         //our actual camera that's pointing at our root's position
         let canvas = document.getElementById("gameCanvas");
-        //this.camera = new UniversalCamera("cam", new Vector3(0, 0, -30), this.scene);
-        this.camera = new ArcRotateCamera("playerCamera", Math.PI/10, Math.PI/10, 10, new Vector3(0, 0, -30), this.scene)
+        this.camera = new ArcRotateCamera("playerCamera", Math.PI/10, Math.PI/10, 10, new Vector3(0, 0, 0), this.scene)
         this.camera.lockedTarget = this._camRoot.position;
         //this.camera.fov = 0.47350045992678597;
         this.camera.parent = this._camRoot;
@@ -97,19 +103,11 @@ export class Player extends TransformNode {
         this._camRoot.position = Vector3.Lerp(this._camRoot.position, new Vector3(this.mesh.position.x, centerPlayer, this.mesh.position.z), 0.4);
     }
 
-    private _updateFromControls(): void {
+    private _updateInputVectorFromControls(): void {
         this._deltaTime = this.scene.getEngine().getDeltaTime() / 1000.0;
-        this._moveDirection = Vector3.Zero(); // vector that holds movement information
+        this._inputAsVector = Vector3.Zero(); // vector that holds movement information
         this._h = this._input.horizontal; //x-axis
         this._v = this._input.vertical; //z-axis
-
-        //--DASHING--
-        //limit dash to once per ground/platform touch
-        //can only dash when in the air
-        if (this._input.dashing && !this._dashPressed && this._canDash && this._grounded) {
-            this._canDash = false;
-            this._dashPressed = true;
-        }
         
         //--MOVEMENTS BASED ON CAMERA (as it rotates)--
         let fwd = new Vector3(Math.cos(this.camera.alpha), 0, Math.sin(this.camera.alpha));
@@ -119,9 +117,6 @@ export class Player extends TransformNode {
         let correctedHorizontal = right.scaleInPlace(this._h);
         //movement based off of camera's view
         let move = correctedHorizontal.addInPlace(correctedVertical);
-
-        //clear y so that the character doesnt fly up, normalize for next step
-        this._moveDirection = new Vector3((move).normalize().x, 0, (move).normalize().z);
 
         //clamp the input value so that diagonal movement isn't twice as fast
         let inputMag = Math.abs(this._h) + Math.abs(this._v);
@@ -134,26 +129,32 @@ export class Player extends TransformNode {
         }
 
         //final movement that takes into consideration the inputs
-        this._moveDirection = this._moveDirection.scaleInPlace(this._inputAmt * Player.SPEED);
+        this._inputAsVector = move.scaleInPlace(this._inputAmt );
+    }
 
+    private _rotatePlayer(): void{
         //check if there is movement to determine if rotation is needed
         let input = new Vector3(this._input.horizontalAxis, 0, this._input.verticalAxis); //along which axis is the direction
-        if (input.length() == 0) {//if there's no input detected, prevent rotation and keep player in same rotation
-            return;
-        }
-
+        if (input.length() == 0) return;//if there's no input detected, prevent rotation and keep player in same rotation
         let angle = Math.atan2(this._input.horizontalAxis, this._input.verticalAxis);
         angle += Math.atan2(Math.cos(this.camera.alpha), Math.sin(this.camera.alpha));
         
         let targ = Quaternion.FromEulerAngles(0, angle, 0);
         this.mesh.rotationQuaternion = Quaternion.Slerp(this.mesh.rotationQuaternion, targ, 10 * this._deltaTime);
-
     }
 
     private _beforeRenderUpdate(): void {
-        this._updateFromControls();
+        this._updateInputVectorFromControls();
+        this._rotatePlayer();
+        this._updateCharacterPosition();
         this._updateGroundDetection();
         this._animatePlayer();
+    }
+
+    private _updateCharacterPosition(): void {
+                this._acc = new Vector3(this._inputAsVector.x * Player.ACCELERATION, 0, this._inputAsVector.z * Player.ACCELERATION);
+        this._speed = (this._speed.add(this._acc)).scaleInPlace(1 - Player.AIR_RESISTANCE);
+        this._speed.y = 0;
     }
 
     public activatePlayerCamera(): ArcRotateCamera {
@@ -167,26 +168,24 @@ export class Player extends TransformNode {
     private _animatePlayer(): void {
         if (this._input.inputMap["z"] || this._input.inputMap["q"] || this._input.inputMap["s"] || this._input.inputMap["d"])
         {
-            if (this._currentAnim == this._idle){
-                this._numberFrameSinceLastAnim = 0;
-            }
-            if (this._currentAnim !== this._run && this._numberFrameSinceLastAnim < this._numberFrameStartRunToRun)
+            if (this._currentAnim !== this._run && this._startRunCountFrame < this._startRuntoRunNbFrame)
             {
                 this._currentAnim = this._startRun;
+                this._startRunCountFrame++;
             } else {
                 this._currentAnim = this._run;
+                this._startRunCountFrame = 0;
             }
         } else {
+            this._startRunCountFrame = 0;
             this._currentAnim = this._idle;
         }
-        console.log(this._currentAnim.name);
+
         if(this._currentAnim != null && this._prevAnim !== this._currentAnim){
             this._prevAnim.stop();
             this._currentAnim.play(this._currentAnim.loopAnimation);
             this._prevAnim = this._currentAnim;
-            this._numberFrameSinceLastAnim = 0;
         }
-        this._numberFrameSinceLastAnim++;
     }
 
     private _setUpAnimations(): void {
@@ -220,6 +219,11 @@ export class Player extends TransformNode {
     }
 
     private _updateGroundDetection(): void {
+        console.log(this._jumpCount);
+        // Timer dependant variables
+
+        if (this._jumpFrameSinceLastPressed>0) this._jumpFrameSinceLastPressed++;
+        if (this._jumpFrameSinceLastPressed>this._jumpCooldown) this._jumpFrameSinceLastPressed = 0;
         if (!this._isGrounded()) {
             //if the body isnt grounded, check if it's on a slope and was either falling or walking onto it
             if (this._checkSlope() && this._gravity.y <= 0) {
@@ -234,25 +238,30 @@ export class Player extends TransformNode {
             }
         }
         //Jump detection
-        if (this._input.jumpKeyDown && this._jumpCount > 0) {
-            this._gravity.y = Player.JUMP_FORCE;
-            this._jumpCount--;
+        if (this._input.jumpKeyDown && this._jumpCount > 0 && (this._jumpFrameSinceLastPressed == 0)){
+            // First jump
+            if(this._jumpCount == Player.MAX_JUMP){
+                this._gravity.y = Player.FIRST_JUMP_FORCE;
+                this._jumpCount--;
+                this._jumpFrameSinceLastPressed++;
+            }
+            // Second jump
+            else{
+                this._gravity.y = Player.SECOND_JUMP_FORCE;
+                this._jumpCount--;
+                this._jumpFrameSinceLastPressed++;
+            }
         }
         //limit the speed of gravity to the negative of the jump power
-        if (this._gravity.y < -Player.JUMP_FORCE) {
-            this._gravity.y = -Player.JUMP_FORCE;
+        if (this._gravity.y < -Player.FIRST_JUMP_FORCE) {
+            this._gravity.y = -Player.FIRST_JUMP_FORCE;
         }
-        this.mesh.moveWithCollisions(this._moveDirection.addInPlace(this._gravity));
+        this.mesh.moveWithCollisions(this._speed.addInPlace(this._gravity));
         if (this._isGrounded()) {
             this._gravity.y = 0;
             this._grounded = true;
             this._lastGroundPos.copyFrom(this.mesh.position);
-            this._jumpCount = Player.MAX_JUMP; //allow for jumping
-            //dashing reset
-            this._canDash = true; //the ability to dash
-            //reset sequence(needed if we collide with the ground BEFORE actually completing the dash duration)
-            this.dashTime = 0;
-            this._dashPressed = false;
+            this._jumpCount = Player.MAX_JUMP;
         }
     }
 
