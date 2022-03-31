@@ -3,19 +3,17 @@ import { AnimationGroup, ArcRotateCamera, Mesh, Quaternion, Ray, RuntimeAnimatio
 export class Player extends TransformNode {
     // General settings
     public static SPEED: number = 0.25;
-    public static FIRST_JUMP_FORCE: number = 0.35;
-    public static SECOND_JUMP_FORCE: number = 0.28;
-    public static GRAVITY: number = -0.8;
+    public static FIRST_JUMP_FORCE: number = 0.5;
+    public static SECOND_JUMP_FORCE: number = 0.4;
+    public static GRAVITY: number = -0.01;
     public static DASH_FACTOR: number = 1.5;
-    public static DASH_TIME: number = 50; //how many frames the dash lasts
-    public static MAX_JUMP: number = 2;
     public static AIR_RESISTANCE: number = 0.1;
-    public static ACCELERATION: number = 0.05;
-
+    public static ACCELERATION: number = 0.03;
     // Input settings
     private _jumpCooldown: number = 60;
     private _jumpCount: number = 2;
     private _jumpFrameSinceLastPressed : number = 0;
+    private _secondJumpUsed : boolean = false;
     private _pressIsFirstJump : boolean = false;
 
     // Camera
@@ -46,7 +44,6 @@ export class Player extends TransformNode {
 
     // Controls/Physics
     private _input;
-    private _inputAsVector: Vector3;
     private _h: number;
     private _v: number;
     private _acc: Vector3 = new Vector3(0, 0, 0);
@@ -103,9 +100,10 @@ export class Player extends TransformNode {
         this._camRoot.position = Vector3.Lerp(this._camRoot.position, new Vector3(this.mesh.position.x, centerPlayer, this.mesh.position.z), 0.4);
     }
 
-    private _updateInputVectorFromControls(): void {
+    private _updateMovementFromInput(): void {
         this._deltaTime = this.scene.getEngine().getDeltaTime() / 1000.0;
-        this._inputAsVector = Vector3.Zero(); // vector that holds movement information
+        // -- X and Z part --
+        let xzInputAsVector = Vector3.Zero(); // vector that holds movement information
         this._h = this._input.horizontal; //x-axis
         this._v = this._input.vertical; //z-axis
         
@@ -129,7 +127,34 @@ export class Player extends TransformNode {
         }
 
         //final movement that takes into consideration the inputs
-        this._inputAsVector = move.scaleInPlace(this._inputAmt );
+        xzInputAsVector = move.scaleInPlace(this._inputAmt);
+        this._acc = new Vector3(xzInputAsVector.x * Player.ACCELERATION, Player.GRAVITY, xzInputAsVector.z * Player.ACCELERATION);
+        this._speed = (this._speed.addInPlace(this._acc));
+        
+        // -- Y part --
+        if (this._jumpFrameSinceLastPressed>0) this._jumpFrameSinceLastPressed++;
+        if (this._jumpFrameSinceLastPressed>this._jumpCooldown) this._jumpFrameSinceLastPressed = 0;
+        if(this._isGrounded()){
+            this._grounded = true;
+            this._secondJumpUsed = false;
+            this._speed.y = 0;
+            if (this._input.jumpKeyDown && this._jumpFrameSinceLastPressed == 0){
+                this._speed.y = Player.FIRST_JUMP_FORCE;
+                this._jumpFrameSinceLastPressed = 1;
+            }
+        } else {
+            if (this._input.jumpKeyDown && this._jumpFrameSinceLastPressed == 0 && !this._secondJumpUsed){
+                this._speed.y = Player.SECOND_JUMP_FORCE;
+                this._jumpFrameSinceLastPressed = 1;
+                this._secondJumpUsed = true;
+            }
+        }
+        let y = this._speed.y
+        this._speed = this._speed.scaleInPlace(1 - Player.AIR_RESISTANCE);
+        this._speed.y = y;
+        console.log(this._speed.y);
+
+        this.mesh.moveWithCollisions(this._speed);
     }
 
     private _rotatePlayer(): void{
@@ -144,17 +169,9 @@ export class Player extends TransformNode {
     }
 
     private _beforeRenderUpdate(): void {
-        this._updateInputVectorFromControls();
+        this._updateMovementFromInput();
         this._rotatePlayer();
-        this._updateCharacterPosition();
-        this._updateGroundDetection();
         this._animatePlayer();
-    }
-
-    private _updateCharacterPosition(): void {
-                this._acc = new Vector3(this._inputAsVector.x * Player.ACCELERATION, 0, this._inputAsVector.z * Player.ACCELERATION);
-        this._speed = (this._speed.add(this._acc)).scaleInPlace(1 - Player.AIR_RESISTANCE);
-        this._speed.y = 0;
     }
 
     public activatePlayerCamera(): ArcRotateCamera {
@@ -219,6 +236,7 @@ export class Player extends TransformNode {
     }
 
     private _updateGroundDetection(): void {
+        /*
         console.log(this._jumpCount);
         // Timer dependant variables
 
@@ -240,7 +258,7 @@ export class Player extends TransformNode {
         //Jump detection
         if (this._input.jumpKeyDown && this._jumpCount > 0 && (this._jumpFrameSinceLastPressed == 0)){
             // First jump
-            if(this._jumpCount == Player.MAX_JUMP){
+            if(this._jumpCount == 2){
                 this._gravity.y = Player.FIRST_JUMP_FORCE;
                 this._jumpCount--;
                 this._jumpFrameSinceLastPressed++;
@@ -261,8 +279,9 @@ export class Player extends TransformNode {
             this._gravity.y = 0;
             this._grounded = true;
             this._lastGroundPos.copyFrom(this.mesh.position);
-            this._jumpCount = Player.MAX_JUMP;
+            this._jumpCount = 2;
         }
+        */
     }
 
     private _checkSlope(): boolean {
