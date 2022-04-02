@@ -14,7 +14,7 @@ class App {
     private _engine: Engine;
     
     //Game State Related
-    public assets;
+    public characterAssets;
     private _environment: Environment;
     private _player: Player;
     private _input: PlayerInput;
@@ -83,7 +83,7 @@ class App {
         this._environment = environment; //class variable for App
         await this._environment.load(); //environment
         //...load assets
-        await this._loadCharacterAssets(scene); //character        
+        await this._loadCharacterAssets(scene); //character      
     }
 
     private async _initializeGameAsync(scene): Promise<void> {
@@ -99,14 +99,14 @@ class App {
         shadowGenerator.darkness = 0.4;
     
         //Create the player
-        this._player = new Player(this.assets, scene, shadowGenerator, this._input);
+        this._player = new Player(this.characterAssets, scene, shadowGenerator, this._input);
         const camera = this._player.activatePlayerCamera();
     }
 
     private async _loadCharacterAssets(scene: Scene) {
         async function loadCharacter(){
         //collision mesh
-        const outer = MeshBuilder.CreateBox("outer", { width: 2, depth: 1, height: 3 }, scene);
+        const outer = MeshBuilder.CreateBox("outer", { width: 0.5, depth: 0.5, height: 0.5 }, scene);
         outer.isVisible = false;
         outer.isPickable = false;
         outer.checkCollisions = true;
@@ -136,7 +136,7 @@ class App {
             });
         }
         return loadCharacter().then((assets) => {
-            this.assets = assets;
+            this.characterAssets = assets;
         });
     }
 
@@ -194,24 +194,6 @@ class App {
         //dont detect any inputs from this ui while the game is loading
         scene.detachControl();
     
-        //create a simple button
-        /*
-        const loseBtn = Button.CreateSimpleButton("lose", "LOSE");
-        loseBtn.width = 0.2
-        loseBtn.height = "40px";
-        loseBtn.color = "white";
-        loseBtn.top = "-14px";
-        loseBtn.thickness = 0;
-        loseBtn.verticalAlignment = Control.VERTICAL_ALIGNMENT_BOTTOM;
-        playerUI.addControl(loseBtn);
-    
-        //this handles interactions with the start button attached to the scene
-        loseBtn.onPointerDownObservable.add(() => {
-            this._goToLose();
-            scene.detachControl(); //observables disabled
-        });
-        */
-    
         //--INPUT--
         this._input = new PlayerInput(scene); //detect keyboard/mobile inputs
 
@@ -220,7 +202,9 @@ class App {
 
         //--WHEN SCENE FINISHED LOADING--
         await scene.whenReadyAsync();
-        scene.getMeshByName("outer").position = new Vector3(0, 3, 0);
+
+        ////Actions to complete once the game loop is setup
+        scene.getMeshByName("outer").position = scene.getTransformNodeByName("Empty").getAbsolutePosition(); //move the player to the start position
     
         //get rid of start scene, switch to gamescene and change states
         this._scene.dispose();
@@ -229,8 +213,7 @@ class App {
         this._engine.hideLoadingUI();
         //the game is ready, attach control back
         this._scene.attachControl();
-        this._scene.debugLayer.show();
-        }
+    }
 
     private async _goToCutScene(){
         //var finishedLoading = false;

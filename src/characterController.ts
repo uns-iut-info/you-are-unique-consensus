@@ -2,13 +2,14 @@ import { AnimationGroup, ArcRotateCamera, Mesh, Quaternion, Ray, RuntimeAnimatio
 
 export class Player extends TransformNode {
     // General settings
-    public static SPEED: number = 0.25;
-    public static FIRST_JUMP_FORCE: number = 0.5;
-    public static SECOND_JUMP_FORCE: number = 0.4;
-    public static GRAVITY: number = -0.01;
+    //public static SPEED: number = 0.25;
+    public static FIRST_JUMP_FORCE: number = 0.12;
+    public static SECOND_JUMP_FORCE: number = 0.10;
+    public static GRAVITY: number = -0.0032;
     public static DASH_FACTOR: number = 1.5;
-    public static AIR_RESISTANCE: number = 0.1;
-    public static ACCELERATION: number = 0.03;
+    public static AIR_RESISTANCE: number = 0.15;
+    public static ACCELERATION: number = 0.010;
+    public static FALL_MAX_SPEED: number = -0.5;
     // Input settings
     private _jumpCooldown: number = 60;
     private _jumpCount: number = 2;
@@ -27,7 +28,7 @@ export class Player extends TransformNode {
     // Animations
     private _walk: AnimationGroup;
     private _run: AnimationGroup;
-    private _startRun: AnimationGroup;
+    private _runStart: AnimationGroup;
     private _idle: AnimationGroup;
     private _jump: AnimationGroup;
     private _land: AnimationGroup;
@@ -36,8 +37,8 @@ export class Player extends TransformNode {
     private _prevAnim: AnimationGroup;
 
     // Animations settings
-    private _startRunCountFrame : number = 0; 
-    private _startRuntoRunNbFrame: number = 130;
+    private _runStartCountFrame : number = 0; 
+    private _runStarttoRunNbFrame: number = 130;
     
     // State
     private _grounded;
@@ -61,18 +62,17 @@ export class Player extends TransformNode {
     constructor(assets, scene: Scene, shadowGenerator: ShadowGenerator, input) {
         super("player", scene);
         this.scene = scene;
-        
         this.mesh = assets.mesh;
         this.mesh.parent = this;
+        //console.log(this.scene.getTransformNodeByName("Empty"));
         this._setupPlayerCamera();
         console.log(assets.animationGroups);
         shadowGenerator.addShadowCaster(assets.mesh); //the player mesh will cast shadows
         this._input = input;
-        console.log(AnimationGroup)
-        this._walk = assets.animationGroups[0];
-        this._startRun = assets.animationGroups[1];
-        this._idle = assets.animationGroups[2];
-        this._run = assets.animationGroups[4];
+        this._idle = assets.animationGroups[0];
+        this._walk = assets.animationGroups[1];
+        this._runStart = assets.animationGroups[2];
+        this._run = assets.animationGroups[3];
         this._setUpAnimations();
     }
 
@@ -152,7 +152,9 @@ export class Player extends TransformNode {
         let y = this._speed.y
         this._speed = this._speed.scaleInPlace(1 - Player.AIR_RESISTANCE);
         this._speed.y = y;
-        console.log(this._speed.y);
+        if (this._speed.y < Player.FALL_MAX_SPEED){
+            this._speed.y = Player.FALL_MAX_SPEED;
+        }
 
         this.mesh.moveWithCollisions(this._speed);
     }
@@ -185,16 +187,16 @@ export class Player extends TransformNode {
     private _animatePlayer(): void {
         if (this._input.inputMap["z"] || this._input.inputMap["q"] || this._input.inputMap["s"] || this._input.inputMap["d"])
         {
-            if (this._currentAnim !== this._run && this._startRunCountFrame < this._startRuntoRunNbFrame)
+            if (this._currentAnim !== this._run && this._runStartCountFrame < this._runStarttoRunNbFrame)
             {
-                this._currentAnim = this._startRun;
-                this._startRunCountFrame++;
+                this._currentAnim = this._runStart;
+                this._runStartCountFrame++;
             } else {
                 this._currentAnim = this._run;
-                this._startRunCountFrame = 0;
+                this._runStartCountFrame = 0;
             }
         } else {
-            this._startRunCountFrame = 0;
+            this._runStartCountFrame = 0;
             this._currentAnim = this._idle;
         }
 
@@ -203,11 +205,12 @@ export class Player extends TransformNode {
             this._currentAnim.play(this._currentAnim.loopAnimation);
             this._prevAnim = this._currentAnim;
         }
+        //console.log(this._currentAnim.name)
     }
 
     private _setUpAnimations(): void {
         this.scene.stopAllAnimations();
-        this._startRun.loopAnimation = false;
+        this._runStart.loopAnimation = false;
         this._run.loopAnimation = true;
         this._idle.loopAnimation = true;
 
@@ -233,55 +236,6 @@ export class Player extends TransformNode {
         } else {
             return true;
         }
-    }
-
-    private _updateGroundDetection(): void {
-        /*
-        console.log(this._jumpCount);
-        // Timer dependant variables
-
-        if (this._jumpFrameSinceLastPressed>0) this._jumpFrameSinceLastPressed++;
-        if (this._jumpFrameSinceLastPressed>this._jumpCooldown) this._jumpFrameSinceLastPressed = 0;
-        if (!this._isGrounded()) {
-            //if the body isnt grounded, check if it's on a slope and was either falling or walking onto it
-            if (this._checkSlope() && this._gravity.y <= 0) {
-                //if you are considered on a slope, you're able to jump and gravity wont affect you
-                this._gravity.y = 0;
-                this._jumpCount = 1;
-                this._grounded = true;
-            } else {
-                //keep applying gravity
-                this._gravity = this._gravity.addInPlace(Vector3.Up().scale(this._deltaTime * Player.GRAVITY));
-                this._grounded = false;
-            }
-        }
-        //Jump detection
-        if (this._input.jumpKeyDown && this._jumpCount > 0 && (this._jumpFrameSinceLastPressed == 0)){
-            // First jump
-            if(this._jumpCount == 2){
-                this._gravity.y = Player.FIRST_JUMP_FORCE;
-                this._jumpCount--;
-                this._jumpFrameSinceLastPressed++;
-            }
-            // Second jump
-            else{
-                this._gravity.y = Player.SECOND_JUMP_FORCE;
-                this._jumpCount--;
-                this._jumpFrameSinceLastPressed++;
-            }
-        }
-        //limit the speed of gravity to the negative of the jump power
-        if (this._gravity.y < -Player.FIRST_JUMP_FORCE) {
-            this._gravity.y = -Player.FIRST_JUMP_FORCE;
-        }
-        this.mesh.moveWithCollisions(this._speed.addInPlace(this._gravity));
-        if (this._isGrounded()) {
-            this._gravity.y = 0;
-            this._grounded = true;
-            this._lastGroundPos.copyFrom(this.mesh.position);
-            this._jumpCount = 2;
-        }
-        */
     }
 
     private _checkSlope(): boolean {
