@@ -30,7 +30,6 @@ class App {
         // initialize babylon scene and engine
         this._engine = new Engine(this._canvas, true);
         this._scene = new Scene(this._engine);
-        
         // hide/show the Inspector
         window.addEventListener("keydown", (ev) => {
             // Shift+Ctrl+Alt+I
@@ -83,7 +82,7 @@ class App {
         this._environment = environment; //class variable for App
         await this._environment.load(); //environment
         //...load assets
-        await this._loadCharacterAssets(scene); //character      
+        this._loadCharacterAssets(scene); //character      
     }
 
     private async _initializeGameAsync(scene): Promise<void> {
@@ -97,47 +96,26 @@ class App {
     
         const shadowGenerator = new ShadowGenerator(1024, light);
         shadowGenerator.darkness = 0.4;
-    
         //Create the player
         this._player = new Player(this.characterAssets, scene, shadowGenerator, this._input);
         const camera = this._player.activatePlayerCamera();
     }
 
-    private async _loadCharacterAssets(scene: Scene) {
-        async function loadCharacter(){
-        //collision mesh
-        const outer = MeshBuilder.CreateBox("outer", { width: 0.5, depth: 0.5, height: 0.5 }, scene);
-        outer.isVisible = false;
-        outer.isPickable = false;
-        outer.checkCollisions = true;
-
-        //move origin of box collider to the bottom of the mesh (to match player mesh)
-        outer.bakeTransformIntoVertices(Matrix.Translation(0, 1.5, 0))
-        //for collisions
-        outer.ellipsoid = new Vector3(1, 1.5, 1);
-        outer.ellipsoidOffset = new Vector3(0, 1.5, 0);
-
-        outer.rotationQuaternion = new Quaternion(0, 1, 0, 0); // rotate the player mesh 180 since we want to see the back of the player
-
-            return SceneLoader.ImportMeshAsync(null, "./models/", "player.glb", scene).then((result) =>{
-                const root = result.meshes[0];
-                //body is our actual player mesh
-                const body = root;
-                body.parent = outer;
-                body.isPickable = false; //so our raycasts dont hit ourself
-                body.getChildMeshes().forEach(m => {
-                    m.isPickable = false;
-                })
-            
-                return {
-                    mesh: outer as Mesh,
-                    animationGroups: result.animationGroups
-                }
-            });
-        }
-        return loadCharacter().then((assets) => {
-            this.characterAssets = assets;
-        });
+    private _loadCharacterAssets(scene: Scene) {
+       let player =  MeshBuilder.CreateBox("player", { width: Player.WIDTH*2, depth: Player.WIDTH*2, height: Player.HEIGHT*2 }, scene);
+       player.checkCollisions = true;
+       player.isPickable = false;
+       const material = new StandardMaterial('yo', scene)
+       material.alpha = 1
+       material.diffuseColor = new Color3(1.0, 0.2, 0.7)
+       player.material = material
+       player.ellipsoid = new Vector3(0.25, 0.25, 0.25);
+       //player.ellipsoidOffset = new Vector3(0, 1.5, 0);
+       player.rotationQuaternion = Quaternion.FromEulerVector(player.rotation);
+       this.characterAssets = {
+           mesh: player as Mesh,
+           animationGroups : null
+       }
     }
 
     private async _goToStart() {
@@ -204,8 +182,7 @@ class App {
         await scene.whenReadyAsync();
 
         ////Actions to complete once the game loop is setup
-        scene.getMeshByName("outer").position = scene.getTransformNodeByName("Empty").getAbsolutePosition(); //move the player to the start position
-    
+        scene.getMeshByName("player").position = scene.getTransformNodeByName("Empty").getAbsolutePosition(); //move the player to the start position
         //get rid of start scene, switch to gamescene and change states
         this._scene.dispose();
         this._state = State.GAME;
@@ -213,6 +190,7 @@ class App {
         this._engine.hideLoadingUI();
         //the game is ready, attach control back
         this._scene.attachControl();
+        this._scene.debugLayer.show();
     }
 
     private async _goToCutScene(){
