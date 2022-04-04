@@ -82,7 +82,7 @@ class App {
         this._environment = environment; //class variable for App
         await this._environment.load(); //environment
         //...load assets
-        this._loadCharacterAssets(scene); //character      
+        await this._loadCharacterAssets(scene); //character      
     }
 
     private async _initializeGameAsync(scene): Promise<void> {
@@ -101,20 +101,17 @@ class App {
         const camera = this._player.activatePlayerCamera();
     }
 
-    private _loadCharacterAssets(scene: Scene) {
-       let player =  MeshBuilder.CreateBox("player", { width: Player.WIDTH*2, depth: Player.WIDTH*2, height: Player.HEIGHT*2 }, scene);
-       player.checkCollisions = true;
+    private async _loadCharacterAssets(scene: Scene) {
+       let hitBox =  MeshBuilder.CreateBox("hitBox", { width: Player.WIDTH*2, depth: Player.WIDTH*2, height: Player.HEIGHT*2 }, scene);
+       hitBox.rotationQuaternion = Quaternion.FromEulerVector(hitBox.rotation);
+       let playerRoot = (await SceneLoader.ImportMeshAsync(null, './models/', 'Robot_template_V1.glb', scene));
+       let player = playerRoot.meshes[0];
        player.isPickable = false;
-       const material = new StandardMaterial('yo', scene)
-       material.alpha = 1
-       material.diffuseColor = new Color3(1.0, 0.2, 0.7)
-       player.material = material
-       player.ellipsoid = new Vector3(0.25, 0.25, 0.25);
-       //player.ellipsoidOffset = new Vector3(0, 1.5, 0);
-       player.rotationQuaternion = Quaternion.FromEulerVector(player.rotation);
+       player.getChildMeshes().forEach( m => m.isPickable = false);
        this.characterAssets = {
-           mesh: player as Mesh,
-           animationGroups : null
+           hitBox: hitBox as Mesh,
+           mesh : player as Mesh,
+           animationGroups : playerRoot.animationGroups
        }
     }
 
@@ -182,7 +179,7 @@ class App {
         await scene.whenReadyAsync();
 
         ////Actions to complete once the game loop is setup
-        scene.getMeshByName("player").position = scene.getTransformNodeByName("Empty").getAbsolutePosition(); //move the player to the start position
+        scene.getMeshByName("hitBox").position = scene.getTransformNodeByName("Start").getAbsolutePosition(); //move the player to the start position
         //get rid of start scene, switch to gamescene and change states
         this._scene.dispose();
         this._state = State.GAME;

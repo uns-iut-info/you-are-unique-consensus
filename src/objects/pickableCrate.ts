@@ -9,9 +9,14 @@ export class PickableCrate{
     }
 
     public async load(){
-        let crate = await SceneLoader.ImportMeshAsync(null, "./models/", "wooden crate.glb", this._scene);
-        //crate.receiveShadows = true;
-        //crate.checkCollisions = true;
+        console.log("yes");
+        let crateRoot = (await SceneLoader.ImportMeshAsync(null, "./models/", "wooden crate.glb", this._scene));
+        crateRoot.meshes[0].checkCollisions = true;
+        crateRoot.meshes[0].receiveShadows = true;
+        crateRoot.meshes[0].getChildMeshes().forEach(m=>{
+            m.receiveShadows = true;
+            m.checkCollisions = true;
+        });
     }
 
 }

@@ -25,9 +25,10 @@ export class Environment {
         //Loop through all environment meshes that were imported
         assets.allMeshes.forEach((m) => {
             if (m.name.startsWith("crate")){
-                m.isVisible = false;
                 let crate = new PickableCrate(this._scene, m.position);
                 crate.load();
+                m.isVisible = false;
+                m.setEnabled(false);
             } else {
                 m.receiveShadows = true;
                 m.checkCollisions = true;

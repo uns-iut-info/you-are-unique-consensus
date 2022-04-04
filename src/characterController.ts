@@ -1,11 +1,11 @@
-import { AnimationGroup, ArcRotateCamera, Mesh, Quaternion, Ray, RuntimeAnimation, Scene, ShadowGenerator, TransformNode, UniversalCamera, Vector2, Vector3 } from "@babylonjs/core";
+import { AnimationGroup, ArcRotateCamera, Color3, Mesh, Quaternion, Ray, RuntimeAnimation, Scene, ShadowGenerator, StandardMaterial, TransformNode, UniversalCamera, Vector2, Vector3 } from "@babylonjs/core";
 
 export class Player {//extends TransformNode {
     // General settings
     //public static SPEED: number = 0.25;
-    public static FIRST_JUMP_FORCE: number = 0.10;
-    public static SECOND_JUMP_FORCE: number = 0.08;
-    public static GRAVITY: number = -0.0032;
+    public static FIRST_JUMP_FORCE: number = 0.085;
+    public static SECOND_JUMP_FORCE: number = 0.065;
+    public static GRAVITY: number = -0.0022;
     public static DASH_FACTOR: number = 1.5;
     public static AIR_RESISTANCE: number = 0.15;
     public static ACCELERATION: number = 0.010;
@@ -59,28 +59,39 @@ export class Player {//extends TransformNode {
     private _dashPressed : boolean;
 
     // Player
-    public mesh: Mesh;
+    public hitBox : Mesh;
+    public mesh : Mesh;
 
     constructor(assets, scene: Scene, shadowGenerator: ShadowGenerator, input) {
         this.scene = scene;
+        this.hitBox = assets.hitBox;
+        this.hitBox.checkCollisions = true;
+        this.hitBox.isPickable = false;
+        const material = new StandardMaterial('yo', scene)
+        material.alpha = 1
+        material.diffuseColor = new Color3(0.5, 0.2, 1.0)
+        this.hitBox.material = material
+        this.hitBox.ellipsoid = new Vector3(0.25, 0.99, 0.25);
+        //hitBox.ellipsoidOffset = new Vector3(0, 1.5, 0);
+        this.hitBox.isVisible = true;
         this.mesh = assets.mesh;
+        this.mesh.parent = this.hitBox;
+        this.mesh.position = this.mesh.position.add(new Vector3(0,-Player.HEIGHT-0.2,0));
         this._setupPlayerCamera();
-        shadowGenerator.addShadowCaster(assets.mesh); //the player mesh will cast shadows
+        //shadowGenerator.addShadowCaster(assets.mesh); //the player mesh will cast shadows
         this._input = input;
-        /*
         this._idle = assets.animationGroups[0];
         this._walk = assets.animationGroups[2];
         this._runStart = assets.animationGroups[4];
         this._run = assets.animationGroups[6];
         this._setUpAnimations();
-        */
-        //console.log(assets.animationGroups);
+        console.log(assets.animationGroups);
     }
 
     private _setupPlayerCamera() : ArcRotateCamera {
         //root camera parent that handles positioning of the camera to follow the player
         this._camRoot = new TransformNode("root");
-        this._camRoot.position = this.mesh.position;
+        this._camRoot.position = this.hitBox.position;
         //to face the player from behind (180 degrees)
         this._camRoot.rotation = new Vector3(0, Math.PI, 0);
 
@@ -98,8 +109,8 @@ export class Player {//extends TransformNode {
     }
 
     private _updateCamera(): void {
-        let centerPlayer = this.mesh.position.y + 0.8;
-        this._camRoot.position = Vector3.Lerp(this._camRoot.position, new Vector3(this.mesh.position.x, centerPlayer, this.mesh.position.z), 0.4);
+        let centerPlayer = this.hitBox.position.y + 0.8;
+        this._camRoot.position = Vector3.Lerp(this._camRoot.position, new Vector3(this.hitBox.position.x, centerPlayer, this.hitBox.position.z), 0.4);
     }
 
     private _updateMovementFromInput(): void {
@@ -155,10 +166,9 @@ export class Player {//extends TransformNode {
             this._speed.y = -Player.FALL_MAX_SPEED;
         }
         let y = this._speed.y
-        this.mesh.position.y += this._speed.y;
         this._speed = this._speed.scaleInPlace(1 - Player.AIR_RESISTANCE);
         this._speed.y = y;
-        this.mesh.moveWithCollisions(this._speed);
+        this.hitBox.moveWithCollisions(this._speed);
         //this.mesh.position = this.mesh.position.add(this._speed);
     }
 
@@ -166,17 +176,17 @@ export class Player {//extends TransformNode {
         //check if there is movement to determine if rotation is needed
         let input = new Vector3(this._input.horizontalAxis, 0, this._input.verticalAxis); //along which axis is the direction
         if (input.length() == 0) return;//if there's no input detected, prevent rotation and keep player in same rotation
-        let angle = Math.atan2(-this._input.horizontalAxis, -this._input.verticalAxis);
+        let angle = Math.atan2(this._input.horizontalAxis, this._input.verticalAxis);
         angle += Math.atan2(Math.cos(this.camera.alpha), Math.sin(this.camera.alpha));
         
         let targ = Quaternion.FromEulerAngles(0, angle, 0);
-        this.mesh.rotationQuaternion = Quaternion.Slerp(this.mesh.rotationQuaternion, targ, 10 * this._deltaTime);
+        this.hitBox.rotationQuaternion = Quaternion.Slerp(this.hitBox.rotationQuaternion, targ, 10 * this._deltaTime);
     }
 
     private _beforeRenderUpdate(): void {
         this._updateMovementFromInput();
         this._rotatePlayer();
-        //this._animatePlayer();
+        this._animatePlayer();
     }
 
     public activatePlayerCamera(): ArcRotateCamera {
@@ -226,41 +236,50 @@ export class Player {//extends TransformNode {
         let predicate = function (mesh) {
             return mesh.isPickable && mesh.isEnabled();
         }
-        let eulerRotation = this.mesh.rotationQuaternion.toEulerAngles().y;
+        let eulerRotation = this.hitBox.rotationQuaternion.toEulerAngles().y;
         //console.log(eulerRotation);
         let fwd = new Vector3(Math.cos(eulerRotation), 0, Math.sin(eulerRotation));
         let ray1 = new Ray(
             new Vector3(
-                Player.WIDTH * fwd.x + this.mesh.position.x,
-                this.mesh.position.y - Player.HEIGHT,
-                Player.WIDTH * fwd.z + this.mesh.position.z
+                Player.WIDTH * fwd.x + this.hitBox.position.x,
+                this.hitBox.position.y - Player.HEIGHT,
+                Player.WIDTH * fwd.z + this.hitBox.position.z
             ),
             Vector3.Down(),
             Player.FALL_MAX_SPEED * 2
         );
         let ray2 = new Ray(
             new Vector3(
-                 - Player.WIDTH * fwd.x + this.mesh.position.x,
-                this.mesh.position.y - Player.HEIGHT,
-                Player.WIDTH * fwd.z + this.mesh.position.z
+                 - Player.WIDTH * fwd.x + this.hitBox.position.x,
+                this.hitBox.position.y - Player.HEIGHT,
+                Player.WIDTH * fwd.z + this.hitBox.position.z
             ),
             Vector3.Down(),
             Player.FALL_MAX_SPEED * 2
         );
         let ray3 = new Ray(
             new Vector3(
-                Player.WIDTH * fwd.x + this.mesh.position.x,
-                this.mesh.position.y - Player.HEIGHT,
-                - Player.WIDTH * fwd.z + this.mesh.position.z
+                Player.WIDTH * fwd.x + this.hitBox.position.x,
+                this.hitBox.position.y - Player.HEIGHT,
+                - Player.WIDTH * fwd.z + this.hitBox.position.z
             ),
             Vector3.Down(),
             Player.FALL_MAX_SPEED * 2
         );
         let ray4 = new Ray(
             new Vector3(
-                - Player.WIDTH * fwd.x + this.mesh.position.x,
-                this.mesh.position.y - Player.HEIGHT,
-                - Player.WIDTH * fwd.z + this.mesh.position.z
+                - Player.WIDTH * fwd.x + this.hitBox.position.x,
+                this.hitBox.position.y - Player.HEIGHT,
+                - Player.WIDTH * fwd.z + this.hitBox.position.z
+            ),
+            Vector3.Down(),
+            Player.FALL_MAX_SPEED * 2
+        );
+        let ray5 = new Ray(
+            new Vector3(
+                this.hitBox.position.x,
+                this.hitBox.position.y - Player.HEIGHT,
+                this.hitBox.position.z
             ),
             Vector3.Down(),
             Player.FALL_MAX_SPEED * 2
@@ -270,7 +289,8 @@ export class Player {//extends TransformNode {
         let pick2 = this.scene.pickWithRay(ray2, predicate);
         let pick3 = this.scene.pickWithRay(ray3, predicate);
         let pick4 = this.scene.pickWithRay(ray4, predicate);
-        return pick1.hit || pick2.hit || pick3.hit || pick4.hit;
+        let pick5 = this.scene.pickWithRay(ray5, predicate);
+        return pick5.hit || pick1.hit || pick2.hit || pick3.hit || pick4.hit;
     }
 
     private _isGrounded(): boolean {
