@@ -1,4 +1,4 @@
-import { ArcRotateCamera, Color3, Color4, Engine, FreeCamera, HemisphericLight, Matrix, Mesh, MeshBuilder, PointLight, Quaternion, Scene, SceneLoader, ShadowGenerator, StandardMaterial, Vector3 } from "@babylonjs/core";
+import { ArcRotateCamera, CannonJSPlugin, Color3, Color4, Engine, FreeCamera, HemisphericLight, Matrix, Mesh, MeshBuilder, OimoJSPlugin, PointLight, Quaternion, Scene, SceneLoader, ShadowGenerator, StandardMaterial, Vector3 } from "@babylonjs/core";
 import { AdvancedDynamicTexture, StackPanel, Button, TextBlock, Rectangle, Control, Image } from "@babylonjs/gui";
 import { Player } from "./characterController";
 import { Environment } from "./environment";
@@ -160,10 +160,12 @@ class App {
 
     private async _goToGame(){
         //--SETUP SCENE--
+        var gravityVector = new Vector3(0,-9.81, 0);
+        //var physicsPlugin = new CannonJSPlugin();
+        //this._scene.enablePhysics(gravityVector, physicsPlugin);
         this._scene.detachControl();
         let scene = this._gamescene;
         scene.clearColor = new Color4(0.01568627450980392, 0.01568627450980392, 0.20392156862745098); // a color that fit the overall color scheme better
-
         //--GUI--
         const playerUI = AdvancedDynamicTexture.CreateFullscreenUI("UI");
         //dont detect any inputs from this ui while the game is loading

@@ -1,4 +1,4 @@
-import { AnimationGroup, ArcRotateCamera, Color3, Mesh, Quaternion, Ray, RuntimeAnimation, Scene, ShadowGenerator, StandardMaterial, TransformNode, UniversalCamera, Vector2, Vector3 } from "@babylonjs/core";
+import { AnimationGroup, ArcRotateCamera, Color3, Mesh, PhysicsImpostor, Quaternion, Ray, RuntimeAnimation, Scene, ShadowGenerator, StandardMaterial, TransformNode, UniversalCamera, Vector2, Vector3 } from "@babylonjs/core";
 
 export class Player {//extends TransformNode {
     // General settings
@@ -13,7 +13,7 @@ export class Player {//extends TransformNode {
     public static WIDTH = 0.25;
     public static HEIGHT = 0.8;
     // Input settings
-    private _jumpCooldown: number = 60;
+    private _jumpCooldown: number = 20;
     private _jumpCount: number = 2;
     private _jumpFrameSinceLastPressed : number = 0;
     private _secondJumpUsed : boolean = false;
@@ -66,19 +66,20 @@ export class Player {//extends TransformNode {
         this.scene = scene;
         this.hitBox = assets.hitBox;
         this.hitBox.checkCollisions = true;
+        this.hitBox.isVisible = false;
         this.hitBox.isPickable = false;
+        //this.hitBox.physicsImpostor = new PhysicsImpostor(this.hitBox,PhysicsImpostor.BoxImpostor, { mass: 0, restitution: 0.9 }, scene);
         const material = new StandardMaterial('yo', scene)
         material.alpha = 1
         material.diffuseColor = new Color3(0.5, 0.2, 1.0)
         this.hitBox.material = material
         this.hitBox.ellipsoid = new Vector3(0.25, 0.99, 0.25);
         //hitBox.ellipsoidOffset = new Vector3(0, 1.5, 0);
-        this.hitBox.isVisible = true;
         this.mesh = assets.mesh;
         this.mesh.parent = this.hitBox;
         this.mesh.position = this.mesh.position.add(new Vector3(0,-Player.HEIGHT-0.2,0));
         this._setupPlayerCamera();
-        //shadowGenerator.addShadowCaster(assets.mesh); //the player mesh will cast shadows
+        shadowGenerator.addShadowCaster(this.mesh); //the player mesh will cast shadows
         this._input = input;
         this._idle = assets.animationGroups[0];
         this._walk = assets.animationGroups[2];
