@@ -1,4 +1,4 @@
-import { AnimationGroup, Color3, Mesh, Scene, SceneLoader, StandardMaterial, Vector3 } from "@babylonjs/core";
+import { AnimationGroup, Color3, Mesh, PhysicsImpostor, Scene, SceneLoader, StandardMaterial, Vector3 } from "@babylonjs/core";
 import { PickableCrate } from "./objects/pickableCrate";
 
 export class Environment {
@@ -9,29 +9,22 @@ export class Environment {
     }
 
     public async load() {
-        /*
         var ground = Mesh.CreateBox("ground", 0.2, this._scene);
         ground.scaling = new Vector3(500,.1,500);
         ground.checkCollisions = true;
-        var box = Mesh.CreateBox("nice", 2);
-        const material = new StandardMaterial('test', this._scene)
-        material.alpha = 1
-        material.diffuseColor = new Color3(0.2, 0.2, 0.7)
-        box.material = material
-        box.position = new Vector3(5, 1, 5);
-        box.checkCollisions = true;
-        */
+        ground.physicsImpostor = new PhysicsImpostor(ground, PhysicsImpostor.PlaneImpostor, { mass: 0, restitution: 0.9 }, this._scene);
         const assets = await this._loadAssets();
         //Loop through all environment meshes that were imported
         assets.allMeshes.forEach((m) => {
             if (m.name.startsWith("crate")){
-                let crate = new PickableCrate(this._scene, m.position);
+                let crate = new PickableCrate(this._scene, m.getAbsolutePosition());
                 crate.load();
                 m.isVisible = false;
                 m.setEnabled(false);
             } else {
                 m.receiveShadows = true;
                 m.checkCollisions = true;
+                m.physicsImpostor =  new PhysicsImpostor(m, PhysicsImpostor.BoxImpostor, { mass: 0, restitution: 0.1 }, this._scene);
             }
         });
     }
@@ -39,7 +32,6 @@ export class Environment {
     private async _loadAssets() {
         //loads game environment
         const result = await SceneLoader.ImportMeshAsync(null, "./models/", "startingRoom.glb", this._scene);
-
         let env = result.meshes[0];
         let allMeshes = env.getChildMeshes();
         return {

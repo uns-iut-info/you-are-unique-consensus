@@ -68,6 +68,7 @@ export class Player {//extends TransformNode {
         this.hitBox.checkCollisions = true;
         this.hitBox.isVisible = false;
         this.hitBox.isPickable = false;
+        this.hitBox.physicsImpostor = new PhysicsImpostor(this.hitBox, PhysicsImpostor.BoxImpostor, { mass: 0, restitution: 0.1 }, scene);
         //this.hitBox.physicsImpostor = new PhysicsImpostor(this.hitBox,PhysicsImpostor.BoxImpostor, { mass: 0, restitution: 0.9 }, scene);
         const material = new StandardMaterial('yo', scene)
         material.alpha = 1
