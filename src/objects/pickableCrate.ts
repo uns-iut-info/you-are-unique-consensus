@@ -11,18 +11,30 @@ export class PickableCrate{
     }
 
     public async load() {
-        let crateRoot = (await SceneLoader.ImportMeshAsync(null, "./models/", "wooden crate.glb", this._scene)).meshes[0];
-        crateRoot.setAbsolutePosition(this._startingPosition);
-        crateRoot.checkCollisions = true;
-        crateRoot.receiveShadows = true;
-        crateRoot.physicsImpostor =  new PhysicsImpostor(crateRoot, PhysicsImpostor.BoxImpostor, { mass: 10, restitution: 0.1 }, this._scene);
-        crateRoot.receiveShadows = true;
-        crateRoot.isPickable = false;
-        crateRoot.getChildMeshes().forEach(m=>{
-            m.receiveShadows = true;
-            m.checkCollisions = true;
-            m.isPickable = false;
-        });
-    }z
+        let crateRoot = await (await SceneLoader.ImportMeshAsync(null, "./models/", "wooden crate.glb", this._scene));
+        let crateModel;
+        let crateHitbox;
+        crateRoot.meshes.forEach((m) => {
+            if (m.name == "hitbox"){
+                crateHitbox = m;
+            } else {
+                crateModel = m;
+            }
+        })
+        crateModel.receiveShadows = true;
+        
+        crateModel.isVisible = true;
+        crateHitbox.isVisible = false;
+        
+        crateModel.isPickable = false;
+        crateHitbox.isPickable = true;
+        
+        crateModel.checkCollisions = false;
+        crateHitbox.checkCollisions = true;
+        
+        crateHitbox.physicsImpostor =  new PhysicsImpostor(crateHitbox, PhysicsImpostor.BoxImpostor, { mass: 1, restitution: 0, friction: 0.5 }, this._scene);
+        crateModel.setParent(crateHitbox);
+        crateHitbox.setAbsolutePosition(this._startingPosition);
+    }
 
 }

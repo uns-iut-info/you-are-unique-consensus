@@ -79,7 +79,7 @@ class App {
         this._gamescene = scene;
         
         this._gamescene.enablePhysics(new Vector3(0,-3 , 0), new CannonJSPlugin(true, 10, cannon));
-        
+
         //--CREATE ENVIRONMENT--
         const environment = new Environment(scene);
         this._environment = environment; //class variable for App

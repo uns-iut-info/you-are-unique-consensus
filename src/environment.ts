@@ -12,13 +12,26 @@ export class Environment {
         var ground = Mesh.CreateBox("ground", 0.2, this._scene);
         ground.scaling = new Vector3(500,.1,500);
         ground.checkCollisions = true;
-        ground.physicsImpostor = new PhysicsImpostor(ground, PhysicsImpostor.PlaneImpostor, { mass: 0, restitution: 0.9 }, this._scene);
+        ground.physicsImpostor = new PhysicsImpostor(ground, PhysicsImpostor.PlaneImpostor, { mass: 0, restitution: 0.5, disableBidirectionalTransformation: true }, this._scene);
         const assets = await this._loadAssets();
+
+        var towerMeshes = [];
+        for (var x = 0; x < 7; x++) {
+            for (var z = 0; z < 7; z++) {
+                var box1 = Mesh.CreateBox("towerBox", 1, this._scene);
+                box1.position.x = (x - 4) * 6;
+                box1.position.y = 2 + z * 2;
+                box1.position.z = 0;
+                box1.physicsImpostor = new PhysicsImpostor(box1, PhysicsImpostor.BoxImpostor, { mass: 1, friction: 0.5, restitution: 0 }, this._scene);
+                towerMeshes.push(box1);
+            }
+        }
+
         //Loop through all environment meshes that were imported
-        assets.allMeshes.forEach((m) => {
+        assets.allMeshes.forEach(async (m) => {
             if (m.name.startsWith("crate")){
                 let crate = new PickableCrate(this._scene, m.getAbsolutePosition());
-                crate.load();
+                await crate.load();
                 m.isVisible = false;
                 m.setEnabled(false);
             } else {
